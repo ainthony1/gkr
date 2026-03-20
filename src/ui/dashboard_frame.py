@@ -1,3 +1,4 @@
+import os
 import customtkinter as ctk
 from datetime import datetime, date
 from core.commission_engine import get_cap_year
@@ -40,11 +41,28 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=c['TEXT_PRIMARY'],
         ).pack(anchor="w")
 
+        date_time_row = ctk.CTkFrame(header, fg_color="transparent")
+        date_time_row.pack(anchor="w", pady=(2, 0))
+
         ctk.CTkLabel(
-            header, text=today.strftime("%A, %B %d, %Y"),
+            date_time_row, text=today.strftime("%A, %B %d, %Y"),
             font=font_body(13),
             text_color=c['TEXT_SECONDARY'],
-        ).pack(anchor="w", pady=(2, 0))
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            date_time_row, text="  \u2022  ",
+            font=font_body(13),
+            text_color=c['TEXT_MUTED'],
+        ).pack(side="left")
+
+        self._clock_label = ctk.CTkLabel(
+            date_time_row, text=datetime.now().strftime("%#I:%M %p") if os.name == 'nt' else datetime.now().strftime("%-I:%M %p"),
+            font=font_body(13),
+            text_color=c['TEXT_SECONDARY'],
+        )
+        self._clock_label.pack(side="left")
+        self._update_clock()
 
         # ── Key Metrics ──
         agents = self.db.get_real_agents()
@@ -144,6 +162,13 @@ class DashboardFrame(ctk.CTkFrame):
 
         # Bottom spacer
         ctk.CTkFrame(scroll, fg_color="transparent", height=20).pack()
+
+    def _update_clock(self):
+        try:
+            self._clock_label.configure(text=datetime.now().strftime("%#I:%M %p") if os.name == 'nt' else datetime.now().strftime("%-I:%M %p"))
+            self.after(30000, self._update_clock)
+        except Exception:
+            pass
 
     def _metric_card(self, parent, title, value, subtitle, accent, col, c):
         frame = ctk.CTkFrame(parent, fg_color=c['CARD_BG'], corner_radius=12,

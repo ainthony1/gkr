@@ -14,11 +14,7 @@ from ui.theme import (
 )
 
 
-# ── Animation Constants ──
-SIDEBAR_EXPANDED = 220
-SIDEBAR_COLLAPSED = 60
-SIDEBAR_ANIM_DURATION = 200  # ms
-SIDEBAR_ANIM_STEPS = 12
+SIDEBAR_WIDTH = 60
 TOP_BAR_HEIGHT = 48
 
 
@@ -45,9 +41,8 @@ class App(ctk.CTk):
         self._pending_form_data = None
 
         # Sidebar state
-        self._sidebar_expanded = True
-        self._sidebar_animating = False
-        self._current_sidebar_width = SIDEBAR_EXPANDED
+        self._sidebar_expanded = False
+        self._current_sidebar_width = SIDEBAR_WIDTH
         self._current_page = None
         self._current_nav = "home"
 
@@ -58,15 +53,10 @@ class App(ctk.CTk):
             self._tm.mode = 'dark'
             ctk.set_appearance_mode("dark")
 
-        saved_collapsed = self.db.get_setting('sidebar_collapsed', '0')
-        if saved_collapsed == '1':
-            self._sidebar_expanded = False
-            self._current_sidebar_width = SIDEBAR_COLLAPSED
-
         # Icon cache — load all nav icons once
         self._icon_cache = {}
         for icon_name in ('home', 'document', 'clock', 'people', 'calculator',
-                          'chart_bar', 'moon', 'sun', 'chevron_left', 'chevron_right'):
+                          'chart_bar', 'moon', 'sun'):
             icon = load_nav_icon(icon_name)
             if icon:
                 self._icon_cache[icon_name] = icon
@@ -112,14 +102,14 @@ class App(ctk.CTk):
 
         # Grid: col 0 = sidebar, col 1 = main
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, minsize=self._current_sidebar_width)
+        self.grid_columnconfigure(0, minsize=SIDEBAR_WIDTH)
         self.grid_columnconfigure(1, weight=1)
 
         # ── Sidebar ──
         self.sidebar = ctk.CTkFrame(self, fg_color=c['SIDEBAR_BG'], corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.pack_propagate(False)
-        self.sidebar.configure(width=self._current_sidebar_width)
+        self.sidebar.configure(width=SIDEBAR_WIDTH)
 
         self._build_sidebar(c)
 
@@ -139,9 +129,8 @@ class App(ctk.CTk):
 
         self._build_top_bar(c)
 
-        # If starting collapsed, repack to apply collapsed layout
-        if not self._sidebar_expanded:
-            self._repack_sidebar()
+        # Apply collapsed layout
+        self._repack_sidebar()
 
         # Content area
         self.content = ctk.CTkFrame(self.right_col, fg_color=c['CONTENT_BG'], corner_radius=0)
@@ -259,19 +248,6 @@ class App(ctk.CTk):
         )
         self.theme_btn.pack(fill="x", pady=1, anchor="w")
 
-        # Collapse button
-        chevron_icon = self._icon_cache.get('chevron_left')
-        self.collapse_btn = ctk.CTkButton(
-            self._bottom_frame, text="",
-            image=chevron_icon,
-            font=ctk.CTkFont(size=12),
-            fg_color="transparent",
-            text_color=c['SIDEBAR_TEXT'],
-            hover_color=c['SIDEBAR_HOVER'],
-            width=40, height=36, corner_radius=8,
-            command=self._toggle_sidebar,
-        )
-        self.collapse_btn.pack(fill="x", pady=(1, 4), anchor="w")
 
         # Version footer
         self._version_footer = ctk.CTkFrame(self.sidebar, fg_color="transparent")
@@ -280,80 +256,40 @@ class App(ctk.CTk):
         ctk.CTkLabel(self._version_footer, text="v1.0.0", font=ctk.CTkFont(size=9), text_color=c['SIDEBAR_TEXT']).pack(anchor="w")
 
     def _repack_sidebar(self):
-        """Re-pack all sidebar children in correct order for current state.
-
-        Much cheaper than destroying and recreating widgets — just changes
-        pack order, text, and widget dimensions.
-        """
-        expanded = self._sidebar_expanded
-
-        # Unpack all top-level sidebar children
+        """Re-pack sidebar in collapsed (icon-only) layout."""
         for child in self.sidebar.winfo_children():
             child.pack_forget()
 
-        # 1. Brand
-        self._brand_frame.pack(fill="x", padx=12 if expanded else 4, pady=(20, 0))
+        # Brand
+        self._brand_frame.pack(fill="x", padx=4, pady=(20, 0))
         for w in self._brand_frame.winfo_children():
             w.pack_forget()
-        if expanded:
-            for w, kwargs in self._brand_expanded_widgets:
-                w.pack(**kwargs)
-        else:
-            self._brand_collapsed_label.pack(pady=(4, 0))
+        self._brand_collapsed_label.pack(pady=(4, 0))
 
-        # 2. Nav
-        self._nav_frame.pack(fill="x", padx=8, pady=(24 if expanded else 16, 0))
+        # Nav
+        self._nav_frame.pack(fill="x", padx=8, pady=(16, 0))
         for w in self._nav_frame.winfo_children():
             w.pack_forget()
-        if expanded:
-            self._nav_header.pack(anchor="w", padx=4, pady=(0, 6))
         for name, btn in self.nav_buttons.items():
-            if expanded:
-                btn.configure(text=f"  {self._nav_label_map[name]}", width=0,
-                              anchor="w", height=38, compound="left")
-                btn.pack(fill="x", pady=1, anchor="w")
-            else:
-                btn.configure(text="", width=40, anchor="center", height=40,
-                              compound="top")
-                btn.pack(fill=None, pady=1, anchor="center")
+            btn.configure(text="", width=40, anchor="center", height=40, compound="top")
+            btn.pack(fill=None, pady=1, anchor="center")
 
-        # 3. Spacer
+        # Spacer
         self._spacer.pack(fill="both", expand=True)
 
-        # 4. Bottom frame
+        # Bottom frame
         self._bottom_frame.pack(fill="x", padx=8, pady=(0, 8))
         for w in self._bottom_frame.winfo_children():
             w.pack_forget()
 
         # Theme button
         theme_icon = self._icon_cache.get('moon') if self._tm.mode == 'light' else self._icon_cache.get('sun')
-        if expanded:
-            theme_text = "  Dark Mode" if self._tm.mode == 'light' else "  Light Mode"
-            self.theme_btn.configure(text=theme_text, width=0, anchor="w",
-                                     compound="left", image=theme_icon)
-            self.theme_btn.pack(fill="x", pady=1, anchor="w")
-        else:
-            self.theme_btn.configure(text="", width=40, anchor="center",
-                                     compound="top", image=theme_icon)
-            self.theme_btn.pack(fill=None, pady=1, anchor="center")
+        self.theme_btn.configure(text="", width=40, anchor="center",
+                                 compound="top", image=theme_icon)
+        self.theme_btn.pack(fill=None, pady=1, anchor="center")
 
-        # Collapse button
-        chevron = 'chevron_left' if expanded else 'chevron_right'
-        self.collapse_btn.configure(image=self._icon_cache.get(chevron))
-        if expanded:
-            self.collapse_btn.pack(fill="x", pady=(1, 4), anchor="w")
-        else:
-            self.collapse_btn.pack(fill=None, pady=(1, 4), anchor="center")
-
-        # 5. Version footer (expanded only)
-        if expanded:
-            self._version_footer.pack(fill="x", padx=12, pady=(0, 12))
-
-        # 6. Top bar pills
-        if not expanded:
-            self.top_nav_frame.pack(side="right", pady=8)
-        else:
-            self.top_nav_frame.pack_forget()
+        # Top bar pills always visible
+        self.top_nav_frame.pack(side="right", pady=8)
 
     def _build_top_bar(self, c):
         for w in self.top_bar.winfo_children():
@@ -407,62 +343,6 @@ class App(ctk.CTk):
         except Exception:
             pass
 
-    # ── Sidebar Animation ──
-
-    def _toggle_sidebar(self):
-        if self._sidebar_animating:
-            return
-        self._sidebar_animating = True
-
-        # Hide sidebar children during animation to prevent reflow
-        for child in self.sidebar.winfo_children():
-            child.pack_forget()
-
-        if self._sidebar_expanded:
-            self._animate_sidebar(SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, self._finish_collapse)
-        else:
-            self._animate_sidebar(SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED, self._finish_expand)
-
-    def _animate_sidebar(self, start_w, end_w, on_complete):
-        step = 0
-        total_steps = SIDEBAR_ANIM_STEPS
-        delta = end_w - start_w
-        interval = max(1, SIDEBAR_ANIM_DURATION // total_steps)
-
-        def _step():
-            nonlocal step
-            step += 1
-            # Cubic ease-in-out for smooth acceleration/deceleration
-            t = step / total_steps
-            if t < 0.5:
-                eased = 4 * t * t * t
-            else:
-                eased = 1 - (-2 * t + 2) ** 3 / 2
-            w = int(start_w + delta * eased)
-
-            self.grid_columnconfigure(0, minsize=w)
-            self.sidebar.configure(width=w)
-            self._current_sidebar_width = w
-
-            if step < total_steps:
-                self.after(interval, _step)
-            else:
-                on_complete()
-
-        _step()
-
-    def _finish_collapse(self):
-        self._sidebar_expanded = False
-        self._sidebar_animating = False
-        self._repack_sidebar()
-        self.db.set_setting('sidebar_collapsed', '1')
-
-    def _finish_expand(self):
-        self._sidebar_expanded = True
-        self._sidebar_animating = False
-        self._repack_sidebar()
-        self.db.set_setting('sidebar_collapsed', '0')
-
     # ── Theme Toggle ──
 
     def _toggle_theme(self):
@@ -474,9 +354,7 @@ class App(ctk.CTk):
         # Rebuild shell
         self.sidebar.configure(fg_color=colors['SIDEBAR_BG'])
         self._build_sidebar(colors)
-        # Apply correct collapsed/expanded layout after rebuild
-        if not self._sidebar_expanded:
-            self._repack_sidebar()
+        self._repack_sidebar()
         self.right_col.configure(fg_color=colors['CONTENT_BG'])
         self.top_bar.configure(fg_color=colors['CARD_BG'])
         self.top_bar_border.configure(fg_color=colors['CARD_BORDER'])
