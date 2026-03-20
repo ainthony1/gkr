@@ -8,8 +8,6 @@ A desktop app for tracking agent commissions, generating invoices, and producing
 
 **Cap Tracking** — See at a glance how close each agent is to hitting their annual cap. Once an agent is capped, they keep 100% of their commission (or 50/50 on company leads). The cap year is based on each agent's contract anniversary date, not the calendar year.
 
-**Transaction History** — Browse and search through all past transactions in one place.
-
 **Tax Documents (1099-NEC)** — At the end of the year, pull up any agent's total compensation and generate their 1099 form with one click. The app tracks earnings from every sale automatically — no need to add anything up manually.
 
 **Agent Management** — Add new agents, update contract terms, and manage split types (percentage, tiered, or flat transaction fee).
