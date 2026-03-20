@@ -91,6 +91,7 @@ class App(ctk.CTk):
 
     def _find_excel(self) -> str | None:
         candidates = [
+            get_resource_path(os.path.join('assets', 'agent_info.xlsx')),
             os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agent_info.xlsx'),
             os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent_info.xlsx'),
             os.path.join(os.getcwd(), 'agent_info.xlsx'),

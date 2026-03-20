@@ -14,6 +14,7 @@ a = Analysis(
     datas=[
         ('assets/logo.png', 'assets'),
         ('assets/f1099nec.pdf', 'assets'),
+        ('assets/agent_info.xlsx', 'assets'),
         ('assets/icons', 'assets/icons'),
         (ctk_path, 'customtkinter'),
     ],
