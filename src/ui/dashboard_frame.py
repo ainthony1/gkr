@@ -1,179 +1,256 @@
 import customtkinter as ctk
-from datetime import datetime
+from datetime import datetime, date
+from core.commission_engine import get_cap_year
 from ui.theme import (
     get_colors, font_display, font_heading, font_body, font_caption,
-    card, primary_button, section_label,
+    font_label, card, section_label, font_mono,
 )
 
 
 class DashboardFrame(ctk.CTkFrame):
-    def __init__(self, parent, db, on_go_invoices=None, on_go_taxes=None, on_go_agents=None):
+    def __init__(self, parent, db, on_go_invoices=None, on_go_taxes=None,
+                 on_go_agents=None, on_go_cap_tracker=None):
         c = get_colors()
         super().__init__(parent, fg_color=c['CONTENT_BG'])
         self.db = db
         self.on_go_invoices = on_go_invoices
         self.on_go_taxes = on_go_taxes
         self.on_go_agents = on_go_agents
+        self.on_go_cap_tracker = on_go_cap_tracker
         self._build()
 
     def _build(self):
         c = get_colors()
+        today = date.today()
 
         scroll = ctk.CTkScrollableFrame(self, fg_color=c['CONTENT_BG'])
         scroll.pack(fill="both", expand=True, padx=0, pady=0)
 
-        # Header
+        # ── Welcome Header ──
         header = ctk.CTkFrame(scroll, fg_color="transparent")
-        header.pack(fill="x", padx=24, pady=(20, 0))
+        header.pack(fill="x", padx=28, pady=(24, 0))
+
+        greeting = "Good morning" if datetime.now().hour < 12 else (
+            "Good afternoon" if datetime.now().hour < 17 else "Good evening"
+        )
 
         ctk.CTkLabel(
-            header, text="Dashboard",
-            font=font_display(24),
+            header, text=f"{greeting}!",
+            font=font_display(28),
             text_color=c['TEXT_PRIMARY'],
         ).pack(anchor="w")
 
         ctk.CTkLabel(
-            header, text="Overview of your commission tracking",
+            header, text=today.strftime("%A, %B %d, %Y"),
             font=font_body(13),
             text_color=c['TEXT_SECONDARY'],
         ).pack(anchor="w", pady=(2, 0))
 
-        # Stats cards row
-        stats_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        stats_frame.pack(fill="x", padx=24, pady=(20, 0))
-        stats_frame.columnconfigure((0, 1, 2), weight=1, uniform="stat")
-
+        # ── Key Metrics ──
         agents = self.db.get_real_agents()
         agent_count = len(agents)
+        current_year = today.year
 
-        current_year = datetime.now().year
         txns = self.db.get_real_transactions()
-        ytd_total = sum(
-            t.gross_commission for t in txns
-            if t.closing_date and t.closing_date.startswith(str(current_year))
-        )
+        ytd_txns = [t for t in txns if t.closing_date and t.closing_date.startswith(str(current_year))]
+        ytd_gross = sum(t.gross_commission for t in ytd_txns)
+        ytd_office = sum(t.office_share for t in ytd_txns)
+        ytd_agent_payouts = sum(t.total_payout for t in ytd_txns)
+        ytd_count = len(ytd_txns)
 
-        previous_year = current_year - 1
-        tax_records = self.db.get_tax_records_for_year(previous_year)
-        test_agent_ids = {a.id for a in self.db.get_active_agents() if a.is_test}
-        pending_1099 = sum(
-            1 for r in tax_records
-            if r.agent_id not in test_agent_ids
-            and (r.total_compensation + r.manual_adjustment) >= 600 and not r.filed
-        )
-        pending_label = f"{pending_1099} pending" if pending_1099 > 0 else "All filed"
+        # Count capped agents
+        capped_count = 0
+        for agent in agents:
+            if agent.split_type == 'transaction_fee':
+                continue
+            cap_amount = agent.cap_amount if agent.cap_amount is not None else 0
+            if cap_amount == 0:
+                capped_count += 1
+                continue
+            year_start, year_end = get_cap_year(agent.contract_date, today)
+            cap_ptd = self.db.get_cap_paid_to_date(agent.id, year_start, year_end)
+            manual_adj = self.db.get_cap_adjustment(agent.id, year_start)
+            if (cap_ptd + manual_adj) >= cap_amount:
+                capped_count += 1
 
-        self._stat_card(stats_frame, "Active Agents", str(agent_count), c['PRIMARY'], 0, c)
-        self._stat_card(stats_frame, f"Gross Commissions {current_year}", f"${ytd_total:,.2f}", c['SUCCESS'], 1, c)
-        self._stat_card(stats_frame, f"1099s ({previous_year})", pending_label,
-                        '#D97706' if pending_1099 > 0 else c['SUCCESS'], 2, c)
+        metrics_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        metrics_frame.pack(fill="x", padx=28, pady=(20, 0))
+        metrics_frame.columnconfigure((0, 1, 2, 3), weight=1, uniform="metric")
 
-        # Quick actions
+        metrics = [
+            ("Gross Commissions", f"${ytd_gross:,.0f}", f"YTD {current_year}", c['PRIMARY']),
+            ("Office Revenue", f"${ytd_office:,.0f}", f"YTD {current_year}", c['SUCCESS']),
+            ("Transactions", str(ytd_count), f"YTD {current_year}", '#8B5CF6'),
+            ("Agents Capped", str(capped_count), f"of {agent_count} agents", '#D97706'),
+        ]
+
+        for i, (label, value, sub, accent) in enumerate(metrics):
+            self._metric_card(metrics_frame, label, value, sub, accent, i, c)
+
+        # ── Quick Actions ──
         sl = section_label(scroll, "Quick Actions")
-        sl.pack(fill="x", padx=24, pady=(24, 8), anchor="w")
+        sl.pack(fill="x", padx=28, pady=(24, 10), anchor="w")
 
         actions_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        actions_frame.pack(fill="x", padx=24, pady=(0, 16))
-        actions_frame.columnconfigure((0, 1, 2), weight=1, uniform="action")
+        actions_frame.pack(fill="x", padx=28, pady=(0, 8))
+        actions_frame.columnconfigure((0, 1, 2, 3), weight=1, uniform="action")
 
-        self._action_card(actions_frame, "New Invoice",
-                          "Create a commission invoice for an agent",
-                          "Go to Invoices", self.on_go_invoices, 0, c)
-        self._action_card(actions_frame, "Tax Documents",
-                          "Generate 1099-NEC forms for filing",
-                          "Go to Taxes", self.on_go_taxes, 1, c)
-        self._action_card(actions_frame, "Manage Agents",
-                          "Add, edit, or update agent information",
-                          "Go to Agents", self.on_go_agents, 2, c)
+        actions = [
+            ("New Invoice", "Create a commission\ninvoice for an agent", c['PRIMARY'], self.on_go_invoices),
+            ("Cap Tracker", "Check agent cap\nprogress at a glance", '#8B5CF6', self.on_go_cap_tracker),
+            ("Tax Documents", "Generate 1099-NEC\nforms for agents", '#D97706', self.on_go_taxes),
+            ("Manage Agents", "Add, edit, or update\nagent information", c['SUCCESS'], self.on_go_agents),
+        ]
 
-        # Recent transactions
+        for i, (title, desc, accent, cmd) in enumerate(actions):
+            self._action_card(actions_frame, title, desc, accent, cmd, i, c)
+
+        # ── Recent Transactions ──
         sl2 = section_label(scroll, "Recent Transactions")
-        sl2.pack(fill="x", padx=24, pady=(8, 8), anchor="w")
+        sl2.pack(fill="x", padx=28, pady=(16, 10), anchor="w")
 
-        recent_txns = txns[:5]
+        recent_txns = ytd_txns[:8]
         if recent_txns:
-            for txn in recent_txns:
-                self._txn_row(scroll, txn, c)
+            # Table header
+            table_header = ctk.CTkFrame(scroll, fg_color=c['SECTION_BG'], corner_radius=8, height=32)
+            table_header.pack(fill="x", padx=28, pady=(0, 2))
+            table_header.pack_propagate(False)
+
+            th_inner = ctk.CTkFrame(table_header, fg_color="transparent")
+            th_inner.pack(fill="both", expand=True, padx=16, pady=4)
+
+            headers = [("Invoice", 90), ("Property", 200), ("Agent", 120),
+                       ("Date", 80), ("Gross", 90), ("Agent Payout", 100)]
+            for h_text, h_width in headers:
+                ctk.CTkLabel(
+                    th_inner, text=h_text.upper(),
+                    font=ctk.CTkFont(size=9, weight="bold"),
+                    text_color=c['TEXT_MUTED'],
+                    width=h_width, anchor="w",
+                ).pack(side="left")
+
+            for idx, txn in enumerate(recent_txns):
+                self._txn_row(scroll, txn, idx, c)
         else:
             empty_card = ctk.CTkFrame(scroll, fg_color=c['CARD_BG'], corner_radius=10,
                                        border_width=1, border_color=c['CARD_BORDER'])
-            empty_card.pack(fill="x", padx=24, pady=(0, 10))
+            empty_card.pack(fill="x", padx=28, pady=(0, 10))
+
             ctk.CTkLabel(
-                empty_card, text="No transactions yet. Create your first invoice to get started.",
+                empty_card,
+                text="No transactions yet this year. Create your first invoice to get started.",
                 font=font_body(13), text_color=c['TEXT_SECONDARY'],
-            ).pack(padx=20, pady=20)
+            ).pack(padx=24, pady=24)
 
-    def _stat_card(self, parent, title, value, accent_color, col, c):
-        card_frame = ctk.CTkFrame(parent, fg_color=c['CARD_BG'], corner_radius=10,
-                                   border_width=1, border_color=c['CARD_BORDER'])
-        card_frame.grid(row=0, column=col, sticky="nsew",
-                        padx=(0 if col == 0 else 6, 0 if col == 2 else 6), pady=0)
+        # Bottom spacer
+        ctk.CTkFrame(scroll, fg_color="transparent", height=20).pack()
 
-        # Accent bar
-        ctk.CTkFrame(card_frame, width=4, height=36, fg_color=accent_color,
-                      corner_radius=2).place(x=12, y=14)
+    def _metric_card(self, parent, title, value, subtitle, accent, col, c):
+        frame = ctk.CTkFrame(parent, fg_color=c['CARD_BG'], corner_radius=12,
+                              border_width=1, border_color=c['CARD_BORDER'])
+        frame.grid(row=0, column=col, sticky="nsew",
+                   padx=(0 if col == 0 else 5, 5 if col < 3 else 0), pady=0)
 
-        ctk.CTkLabel(
-            card_frame, text=title,
-            font=font_caption(11), text_color=c['TEXT_SECONDARY'],
-        ).pack(anchor="w", padx=(28, 16), pady=(14, 0))
+        inner = ctk.CTkFrame(frame, fg_color="transparent")
+        inner.pack(fill="x", padx=18, pady=16)
 
-        ctk.CTkLabel(
-            card_frame, text=value,
-            font=ctk.CTkFont(size=20, weight="bold"), text_color=c['TEXT_PRIMARY'],
-        ).pack(anchor="w", padx=(28, 16), pady=(2, 14))
-
-    def _action_card(self, parent, title, description, button_text, callback, col, c):
-        card_frame = ctk.CTkFrame(parent, fg_color=c['CARD_BG'], corner_radius=10,
-                                   border_width=1, border_color=c['CARD_BORDER'])
-        card_frame.grid(row=0, column=col, sticky="nsew",
-                        padx=(0 if col == 0 else 6, 0 if col == 2 else 6), pady=0)
+        # Accent line at top
+        ctk.CTkFrame(inner, width=32, height=3, fg_color=accent,
+                      corner_radius=2).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(
-            card_frame, text=title,
-            font=ctk.CTkFont(size=14, weight="bold"), text_color=c['TEXT_PRIMARY'],
-        ).pack(anchor="w", padx=20, pady=(18, 2))
+            inner, text=title.upper(),
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=c['TEXT_SECONDARY'],
+        ).pack(anchor="w")
 
         ctk.CTkLabel(
-            card_frame, text=description,
-            font=font_caption(12), text_color=c['TEXT_SECONDARY'],
-            wraplength=200,
-        ).pack(anchor="w", padx=20, pady=(0, 10))
+            inner, text=value,
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color=c['TEXT_PRIMARY'],
+        ).pack(anchor="w", pady=(4, 2))
+
+        ctk.CTkLabel(
+            inner, text=subtitle,
+            font=ctk.CTkFont(size=10),
+            text_color=c['TEXT_MUTED'],
+        ).pack(anchor="w")
+
+    def _action_card(self, parent, title, description, accent, callback, col, c):
+        frame = ctk.CTkFrame(parent, fg_color=c['CARD_BG'], corner_radius=12,
+                              border_width=1, border_color=c['CARD_BORDER'])
+        frame.grid(row=0, column=col, sticky="nsew",
+                   padx=(0 if col == 0 else 5, 5 if col < 3 else 0), pady=0)
+
+        # Make entire card clickable
+        inner = ctk.CTkFrame(frame, fg_color="transparent")
+        inner.pack(fill="x", padx=18, pady=16)
+
+        # Colored circle indicator
+        ctk.CTkFrame(inner, width=8, height=8, fg_color=accent,
+                      corner_radius=4).pack(anchor="w", pady=(0, 8))
+
+        ctk.CTkLabel(
+            inner, text=title,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=c['TEXT_PRIMARY'],
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            inner, text=description,
+            font=font_caption(11),
+            text_color=c['TEXT_SECONDARY'],
+            justify="left",
+        ).pack(anchor="w", pady=(4, 10))
 
         if callback:
             ctk.CTkButton(
-                card_frame, text=button_text,
-                font=ctk.CTkFont(size=12, weight="bold"),
-                fg_color=c['PRIMARY'], hover_color=c['PRIMARY_HOVER'],
-                text_color='#FFFFFF', corner_radius=17,
-                height=32, width=130,
+                inner, text="Open \u2192",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=accent,
+                hover_color=c['PRIMARY_HOVER'] if accent == c['PRIMARY'] else accent,
+                text_color='#FFFFFF', corner_radius=14,
+                height=28, width=80,
                 command=callback,
-            ).pack(anchor="w", padx=20, pady=(0, 18))
+            ).pack(anchor="w")
 
-    def _txn_row(self, parent, txn, c):
-        row = ctk.CTkFrame(parent, fg_color=c['CARD_BG'], corner_radius=8,
-                           border_width=1, border_color=c['CARD_BORDER'], height=46)
-        row.pack(fill="x", padx=24, pady=(0, 3))
+    def _txn_row(self, parent, txn, idx, c):
+        bg = c['CARD_BG'] if idx % 2 == 0 else c['ROW_ALT']
+        row = ctk.CTkFrame(parent, fg_color=bg, corner_radius=6, height=40)
+        row.pack(fill="x", padx=28, pady=1)
         row.pack_propagate(False)
 
         inner = ctk.CTkFrame(row, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=16, pady=6)
 
-        left = ctk.CTkFrame(inner, fg_color="transparent")
-        left.pack(side="left", fill="y")
+        font = ctk.CTkFont(size=12)
+        muted = c['TEXT_SECONDARY']
+        primary = c['TEXT_PRIMARY']
 
-        ctk.CTkLabel(
-            left, text=f"{txn.invoice_number}  \u2022  {txn.property_address}",
-            font=font_body(12), text_color=c['TEXT_PRIMARY'],
-        ).pack(anchor="w")
+        # Invoice number
+        ctk.CTkLabel(inner, text=txn.invoice_number, font=font,
+                      text_color=c['PRIMARY'], width=90, anchor="w").pack(side="left")
 
+        # Address (truncated)
+        addr = txn.property_address[:28] + "..." if len(txn.property_address) > 28 else txn.property_address
+        ctk.CTkLabel(inner, text=addr, font=font,
+                      text_color=primary, width=200, anchor="w").pack(side="left")
+
+        # Agent name
         agent_name = txn.agent_name or ""
-        ctk.CTkLabel(
-            left, text=f"{agent_name}  \u2022  {txn.closing_date}",
-            font=font_caption(10), text_color=c['TEXT_SECONDARY'],
-        ).pack(anchor="w")
+        ctk.CTkLabel(inner, text=agent_name, font=font,
+                      text_color=muted, width=120, anchor="w").pack(side="left")
 
-        ctk.CTkLabel(
-            inner, text=f"${txn.gross_commission:,.2f}",
-            font=ctk.CTkFont(size=13, weight="bold"), text_color=c['TEXT_PRIMARY'],
-        ).pack(side="right", anchor="e")
+        # Date
+        ctk.CTkLabel(inner, text=txn.closing_date, font=ctk.CTkFont(size=11),
+                      text_color=muted, width=80, anchor="w").pack(side="left")
+
+        # Gross
+        ctk.CTkLabel(inner, text=f"${txn.gross_commission:,.0f}",
+                      font=ctk.CTkFont(size=12, weight="bold"),
+                      text_color=primary, width=90, anchor="w").pack(side="left")
+
+        # Agent payout
+        ctk.CTkLabel(inner, text=f"${txn.total_payout:,.0f}",
+                      font=ctk.CTkFont(size=12, weight="bold"),
+                      text_color=c['SUCCESS'], width=100, anchor="w").pack(side="left")

@@ -66,7 +66,7 @@ class App(ctk.CTk):
         # Icon cache — load all nav icons once
         self._icon_cache = {}
         for icon_name in ('home', 'document', 'clock', 'people', 'calculator',
-                          'moon', 'sun', 'chevron_left', 'chevron_right'):
+                          'chart_bar', 'moon', 'sun', 'chevron_left', 'chevron_right'):
             icon = load_nav_icon(icon_name)
             if icon:
                 self._icon_cache[icon_name] = icon
@@ -209,6 +209,7 @@ class App(ctk.CTk):
         nav_items = [
             ("home", "Dashboard", "home", self.show_dashboard),
             ("invoices", "Invoices", "document", self.show_invoices),
+            ("cap_tracker", "Cap Tracker", "chart_bar", self.show_cap_tracker),
             ("history", "History", "clock", self.show_all_history),
             ("agents", "Agents", "people", self.show_agent_manager),
             ("taxes", "Taxes", "calculator", self.show_taxes),
@@ -376,6 +377,7 @@ class App(ctk.CTk):
         nav_items = [
             ("home", "Dashboard", self.show_dashboard),
             ("invoices", "Invoices", self.show_invoices),
+            ("cap_tracker", "Cap Tracker", self.show_cap_tracker),
             ("history", "History", self.show_all_history),
             ("agents", "Agents", self.show_agent_manager),
             ("taxes", "Taxes", self.show_taxes),
@@ -485,6 +487,7 @@ class App(ctk.CTk):
         nav_to_show = {
             'home': self.show_dashboard,
             'invoices': self.show_invoices,
+            'cap_tracker': self.show_cap_tracker,
             'history': self.show_all_history,
             'agents': self.show_agent_manager,
             'taxes': self.show_taxes,
@@ -527,7 +530,17 @@ class App(ctk.CTk):
             on_go_invoices=self.show_invoices,
             on_go_taxes=self.show_taxes,
             on_go_agents=self.show_agent_manager,
+            on_go_cap_tracker=self.show_cap_tracker,
         )
+        frame.pack(fill="both", expand=True)
+        self._current_page = frame
+
+    def show_cap_tracker(self):
+        from ui.cap_tracker_frame import CapTrackerFrame
+        self._clear_content()
+        self._highlight_nav("cap_tracker")
+        self._update_top_bar_title("Cap Tracker")
+        frame = CapTrackerFrame(self.content, self.db)
         frame.pack(fill="both", expand=True)
         self._current_page = frame
 

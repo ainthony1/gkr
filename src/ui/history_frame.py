@@ -57,7 +57,7 @@ class HistoryFrame(ctk.CTkFrame):
         ).pack(side="left", padx=(0, 12))
 
         self.filter_var = ctk.StringVar(value="All Agents")
-        agents = self.db.get_active_agents()
+        agents = self.db.get_real_agents()
         agent_names = ["All Agents"] + [a.name for a in agents]
 
         if self.agent:
@@ -100,7 +100,7 @@ class HistoryFrame(ctk.CTkFrame):
         filter_name = self.filter_var.get()
 
         if filter_name == "All Agents":
-            self.transactions = self.db.get_all_transactions()
+            self.transactions = self.db.get_real_transactions()
         else:
             agent = self.db.get_agent_by_name(filter_name)
             if agent:

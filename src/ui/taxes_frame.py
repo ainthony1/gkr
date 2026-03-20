@@ -135,8 +135,8 @@ class TaxesFrame(ctk.CTkFrame):
         # Build lookup of existing records by agent_id
         record_map = {rec.agent_id: rec for rec in records}
 
-        # Get all active agents so every agent shows up
-        all_agents = self.db.get_active_agents()
+        # Get all active non-test agents so every agent shows up
+        all_agents = self.db.get_real_agents()
 
         if not all_agents:
             self._show_empty()

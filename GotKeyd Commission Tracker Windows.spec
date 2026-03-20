@@ -26,7 +26,7 @@ a = Analysis(
         'utils', 'utils.import_agents',
         'ui', 'ui.theme', 'ui.dashboard_frame', 'ui.agent_select_frame',
         'ui.transaction_form', 'ui.review_frame', 'ui.history_frame',
-        'ui.agent_manage_frame', 'ui.taxes_frame',
+        'ui.agent_manage_frame', 'ui.taxes_frame', 'ui.cap_tracker_frame',
     ],
     hookspath=[],
     hooksconfig={},

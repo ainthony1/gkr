@@ -60,6 +60,17 @@ class Database:
                 created_at            TEXT DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS cap_adjustments (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_id    INTEGER NOT NULL REFERENCES agents(id),
+                cap_year_start TEXT NOT NULL,
+                cap_year_end   TEXT NOT NULL,
+                adjustment  REAL DEFAULT 0.0,
+                note        TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now')),
+                UNIQUE(agent_id, cap_year_start)
+            );
+
             CREATE TABLE IF NOT EXISTS app_settings (
                 key   TEXT PRIMARY KEY,
                 value TEXT
@@ -242,6 +253,34 @@ class Database:
               AND closing_date <= ?
         """, (agent_id, year_start, year_end)).fetchone()
         return row[0]
+
+    # --- Cap Adjustment Methods ---
+
+    def get_cap_adjustment(self, agent_id: int, year_start: str) -> float:
+        """Get manual cap adjustment for an agent in a cap year period."""
+        row = self.conn.execute(
+            "SELECT adjustment FROM cap_adjustments WHERE agent_id = ? AND cap_year_start = ?",
+            (agent_id, year_start)
+        ).fetchone()
+        return row[0] if row else 0.0
+
+    def get_cap_adjustment_note(self, agent_id: int, year_start: str) -> str:
+        row = self.conn.execute(
+            "SELECT note FROM cap_adjustments WHERE agent_id = ? AND cap_year_start = ?",
+            (agent_id, year_start)
+        ).fetchone()
+        return row[0] if row else ""
+
+    def upsert_cap_adjustment(self, agent_id: int, year_start: str, year_end: str,
+                               adjustment: float, note: str):
+        """Set manual cap adjustment for an agent's cap year."""
+        self.conn.execute("""
+            INSERT INTO cap_adjustments (agent_id, cap_year_start, cap_year_end, adjustment, note)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(agent_id, cap_year_start)
+            DO UPDATE SET adjustment = ?, note = ?, cap_year_end = ?
+        """, (agent_id, year_start, year_end, adjustment, note, adjustment, note, year_end))
+        self.conn.commit()
 
     # --- Settings Methods ---
 
