@@ -3,7 +3,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from datetime import date
 
-from core.constants import APP_NAME, DB_PATH, LOGO_PATH
+from core.constants import APP_NAME, DB_PATH, LOGO_PATH, get_resource_path
 from core.database import Database
 from core.commission_engine import calculate_commission, get_cap_year
 from generators.pdf_generator import generate_both_invoices
