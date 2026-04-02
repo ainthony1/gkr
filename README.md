@@ -23,8 +23,8 @@ That's it — no other software needed.
 
 ### Mac
 1. Go to the [Releases](https://github.com/ainthony1/gkr/releases) page
-2. Download the `.dmg` file
-3. Open it and drag the app to your Applications folder
+2. Download the Mac `.zip` file
+3. Unzip it and drag the app to your Applications folder
 
 ## Where Things Get Saved
 

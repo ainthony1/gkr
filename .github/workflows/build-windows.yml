@@ -67,23 +67,19 @@ jobs:
         run: |
           pyinstaller "GotKeyd Commission Tracker.spec"
 
-      - name: Create DMG
+      - name: Zip the build
         run: |
-          mkdir -p dmg_staging
-          cp -R "dist/GotKeyd Commission Tracker.app" dmg_staging/
-          hdiutil create -volname "GotKeyd Commission Tracker" \
-            -srcfolder dmg_staging -ov -format UDZO \
-            GotKeyd-Commission-Tracker-Mac.dmg
+          cd dist && zip -r ../GotKeyd-Commission-Tracker-Mac.zip "GotKeyd Commission Tracker.app"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: GotKeyd-Commission-Tracker-Mac
-          path: GotKeyd-Commission-Tracker-Mac.dmg
+          path: GotKeyd-Commission-Tracker-Mac.zip
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: GotKeyd-Commission-Tracker-Mac.dmg
+          files: GotKeyd-Commission-Tracker-Mac.zip
           generate_release_notes: true
